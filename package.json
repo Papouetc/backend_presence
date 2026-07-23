@@ -8,7 +8,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npm app.js"
+    "start": "node app.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
