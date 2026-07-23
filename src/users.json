@@ -1,0 +1,12 @@
+[
+    {
+        "matricule": "1",
+        "name": "John",
+        "surname": "John", 
+        "email": "email@gmail.com",
+        "password": "Password123!",
+        "classe": "irt1",
+        "module": "Programmation C",
+        "type": "prof"
+    }
+]
