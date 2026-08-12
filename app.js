@@ -50,7 +50,25 @@ app.get('/', (req,res)=>{
     console.log("get");
     res.send("Page d'acceuil");
 })
-
+//// PRESENCE
+app.post('/presence/statut/manuel', (req,res)=>{
+    const data= req.body;
+    const session= sessions.find(e=> e.id== data.id)
+    console.log(session);
+    const statut= data.statut;
+    if (!session) {
+        return res.status(404).send("session non trouvé")
+    }
+    const student= session.presences.find(q=> q.matricule == data.matricule);
+    if (!student) {
+        return res.status(404).send("etudiant non trouvé")
+    }
+    student.statut= statut;
+    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
+        if (err) console.log(err);
+     })
+     res.status(200).send(student)
+})
 app.post('/presence/scan', (req,res)=>{
     if (!req.body.matricule || !req.body.qrToken) {
         res.status(400).send("Données invalides")
@@ -78,6 +96,8 @@ app.post('/presence/scan', (req,res)=>{
     const presence={
         matricule: data.matricule,
         date: Date.now(),
+        name: data.name,
+        surname: data.surname,
         statut: status
     };
     session.presences.push(presence);
@@ -111,6 +131,7 @@ app.post('/presence/scan', (req,res)=>{
 res.status(200).send("Données reçu !")
 }); */
 
+////////SESSIONS
 app.post('/session',(req,res)=>{
     const data= req.body;
     const exist = sessions.find(e=>
@@ -118,7 +139,7 @@ app.post('/session',(req,res)=>{
     );
     console.log(exist);
     if (exist) {
-        res.status(409).send("Vous avez déja une session existante")
+        res.status(409).send(exist)
         return
     } 
     const dureeMinutes= data.duree || 15;
@@ -141,6 +162,35 @@ app.post('/session',(req,res)=>{
     res.status(200).send(session_i)
 })
 
+app.post('/session/stop',(req,res)=>{
+    const data= req.body;
+    const session= sessions.find(e=> e.id== data.id)
+    console.log(session);
+    
+    if (!session) {
+        return res.status(404).send("session non trouvé")
+    }
+    if (getStatus(session)==false || session.clotureeManuellement==true) {
+        return res.status(404).send("session expiré ou deja cloturée")
+    }
+    session.clotureeManuellement= true
+    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
+        if (err) console.log(err);
+         
+     })
+    res.status(200).send(session)
+})
+app.get('/session/list', (req,res)=>{
+    const data= req.body;
+    const session= sessions.find(e=> e.id== data.id)
+    console.log(session);
+    
+    if (!session) {
+        return res.status(404).send("session non trouvé")
+    }
+    res.status(200).send(session.presences)
+})
+////// LOGIN & CREDENTIALS
 app.get('/login',(req,res)=>{
     //console.log("req:",req);
     
