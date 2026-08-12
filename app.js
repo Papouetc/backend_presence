@@ -180,7 +180,7 @@ app.post('/session/stop',(req,res)=>{
      })
     res.status(200).send(session)
 })
-app.get('/session/list', (req,res)=>{
+app.post('/session/list', (req,res)=>{
     const data= req.body;
     const session= sessions.find(e=> e.id== data.id)
     console.log(session);
@@ -191,7 +191,7 @@ app.get('/session/list', (req,res)=>{
     res.status(200).send(session.presences)
 })
 ////// LOGIN & CREDENTIALS
-app.get('/login',(req,res)=>{
+app.post('/login',(req,res)=>{
     //console.log("req:",req);
     
     const data= req.body;
