@@ -71,25 +71,25 @@ app.post('/presence/statut/manuel', (req,res)=>{
 })
 app.post('/presence/scan', (req,res)=>{
     if (!req.body.matricule || !req.body.qrToken) {
-        res.status(400).send("Données invalides")
+        return res.status(400).send("Données invalides")
     }
     const data= req.body;
      const session= sessions.find(e=>
         e.qrToken==data.qrToken
      )
      if (!session) {
-        return res.send("session inexistante").status(404)
+        return res.status(404).send("session inexistante")
         
      }else if (getStatus(session)!=true) {
-        return res.send("Session expiré ou invalide")
+        return res.status(400).send("Session expiré ou invalide")
      }else  if(session.classe!=data.classe) {
-        return res.send("Vous ne faites pas partie de cette classe").status(403)
+        return res.status(403).send("Vous ne faites pas partie de cette classe")
      }
     const dejascane= session.presences.find(q=>
         q.matricule==data.matricule
     )
     if (dejascane) {
-        return res.send("Vous avez deja scanné pour cette session").status(409)
+        return res.status(409).send("Vous avez deja scanné pour cette session")
     }
     const seuilRetard= 5*60000;
     const status= ((Date.now() -session.date)>seuilRetard? "retard": "present")
@@ -156,9 +156,9 @@ app.post('/session',(req,res)=>{
         presences: []
     }
     sessions.push(session_i)
-    fs.writeFile("src/session.json",JSON.stringify(sessions),(err) => {
-    if(err) console.log(err);
-})
+    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
+        if (err) console.log(err);
+    })
     res.status(200).send(session_i)
 })
 
