@@ -1,112 +1,104 @@
-const { log } = require('console');
-const express= require('express')
-const fs = require('fs');
-const cors= require("cors");
-const crypto= require('crypto')
-const { json } = require('stream/consumers');
+import express from 'express';
+import cors from 'cors';
+import {
+    initDatabase,
+    authenticateProfile,
+    createAttendance,
+    createAttendanceSession,
+    getSessionById,
+    getSessionByQrToken,
+    updateAttendanceStatus,
+    listAttendances,
+    closeAttendanceSession
+} from './database.js';
+//const { json } = require('stream/consumers');
 //const attendance= require('./routes/attendance')
-const { checkInfo,loadSavedFace } = require('./functions/auth')
 
 
 
 
-const app= express()
+const app = express()
 
 //app.use(attendance);
 app.use(cors());
 app.use(express.json())
 
-let sessions = [];
-try {
-    const raw = fs.readFileSync("src/session.json", "utf-8");
-    sessions = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(sessions)) {
-        sessions = [];
-    }
-} catch (err) {
-    sessions = [];
-}
-
-console.log("sessions: ", sessions);
-
-let users= fs.readFileSync("src/users.json", "utf-8");
-users= JSON.parse(users);
-//console.log('users:', users);
-
 function getStatus(session) {
-    if (session.clotureeManuellement==true) {
-        return false
-    }else{
-        if (session.qrExpireAt<Date.now()) {
-            return false
-        }else{
-            return true
-        }
-    }
-
+    return !session.manually_closed && new Date(session.qr_expires_at).getTime() > Date.now();
 }
 
-app.get('/', (req,res)=>{
+async function formatSession(session) {
+    return {
+        id: session.id,
+        classe: session.classe,
+        prof: session.prof,
+        matiere: session.matiere,
+        date: session.started_at,
+        qrToken: session.qr_token,
+        qrExpireAt: session.qr_expires_at,
+        clotureeManuellement: session.manually_closed,
+        presences: await listAttendances(session.id)
+    };
+}
+
+app.get('/', (req, res) => {
     console.log("get");
     res.send("Page d'acceuil");
 })
 //// PRESENCE
-app.post('/presence/statut/manuel', (req,res)=>{
-    const data= req.body;
-    const session= sessions.find(e=> e.id== data.id)
-    console.log(session);
-    const statut= data.statut;
+app.post('/presence/statut/manuel', async (req, res) => {
+    const data = req.body;
+    const student = await updateAttendanceStatus(data.id, data.matricule, data.statut);
+    if (!student) {
+        return res.status(404).send("présence non trouvée");
+    }
+    res.status(200).send(student);
+});
+
+app.post('/presence/scan', async (req, res) => {
+    if (!req.body.matricule || !req.body.qrToken) {
+        return res.status(400).send("Données invalides");
+    }
+    const data = req.body;
+    const session = await getSessionByQrToken(data.qrToken);
+    if (!session) {
+        return res.status(404).send("session inexistante");
+    }
+    if (!getStatus(session)) {
+        return res.status(400).send("Session expirée ou invalide");
+    }
+    if (session.classe !== data.classe) {
+        return res.status(403).send("Vous ne faites pas partie de cette classe");
+    }
+    const result = await createAttendance({
+        sessionId: session.id,
+        matricule: data.matricule,
+        name: data.name,
+        surname: data.surname
+    });
+    if (result.error === 'etudiant introuvable') return res.status(404).send(result.error);
+    if (result.error === 'classe_invalide') return res.status(403).send("Vous ne faites pas partie de cette classe");
+    if (result.error === 'deja_scane') return res.status(409).send("Vous avez deja scanné pour cette session");
+    res.status(200).send(result.attendance);
+});
+
+/*
+app.post('/presence/scan-json', (req, res) => {
+    const data = req.body;
     if (!session) {
         return res.status(404).send("session non trouvé")
     }
-    const student= session.presences.find(q=> q.matricule == data.matricule);
+    const student = session.presences.find(q => q.matricule == data.matricule);
     if (!student) {
         return res.status(404).send("etudiant non trouvé")
     }
-    student.statut= statut;
-    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
+    student.statut = statut;
+    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err) => {
         if (err) console.log(err);
-     })
-     res.status(200).send(student)
-})
-app.post('/presence/scan', (req,res)=>{
-    if (!req.body.matricule || !req.body.qrToken) {
-        return res.status(400).send("Données invalides")
-    }
-    const data= req.body;
-     const session= sessions.find(e=>
-        e.qrToken==data.qrToken
-     )
-     if (!session) {
-        return res.status(404).send("session inexistante")
-        
-     }else if (getStatus(session)!=true) {
-        return res.status(400).send("Session expiré ou invalide")
-     }else  if(session.classe!=data.classe) {
-        return res.status(403).send("Vous ne faites pas partie de cette classe")
-     }
-    const dejascane= session.presences.find(q=>
-        q.matricule==data.matricule
-    )
-    if (dejascane) {
-        return res.status(409).send("Vous avez deja scanné pour cette session")
-    }
-    const seuilRetard= 5*60000;
-    const status= ((Date.now() -session.date)>seuilRetard? "retard": "present")
-    const presence={
-        matricule: data.matricule,
-        date: Date.now(),
-        name: data.name,
-        surname: data.surname,
-        statut: status
-    };
-    session.presences.push(presence);
-    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
-       if (err) console.log(err);
-        
     })
-    res.status(200).send(presence);
+    res.status(200).send(student)
 });
+*/
 
 /* app.post('/presence/scan', (req,res)=>{
     if (!req.body.student_id || !req.body.session_id) {
@@ -132,88 +124,68 @@ res.status(200).send("Données reçu !")
 }); */
 
 ////////SESSIONS
-app.post('/session',(req,res)=>{
-    const data= req.body;
-    const exist = sessions.find(e=>
-        e.prof==data.prof &&  getStatus(e)==true
-    );
-    console.log(exist);
-    if (exist) {
-        res.status(409).send(exist)
-        return
-    } 
-    const dureeMinutes= data.duree || 15;
-    const qrExpireAt= new Date(Date.now() + dureeMinutes*60000).getTime();
-    const session_i={
-        id: crypto.randomUUID(),
+app.post('/session', async (req, res) => {
+    const data = req.body;
+    const result = await createAttendanceSession({
+        professor: data.prof,
         classe: data.classe,
-        prof: data.prof,
         matiere: data.matiere,
-        date: new Date(),
-        qrToken: crypto.randomUUID(),
-        qrExpireAt: qrExpireAt,
-        clotureeManuellement: false,
-        presences: []
-    }
-    sessions.push(session_i)
-    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
-        if (err) console.log(err);
-    })
-    res.status(200).send(session_i)
-})
+        dureeMinutes: data.duree || 15
+    });
+    if (result.error) return res.status(404).send(result.error);
+    if (result.existing) return res.status(409).send(await formatSession(await getSessionById(result.existing.id)));
+    res.status(200).send(await formatSession(await getSessionById(result.session.id)));
+});
 
-app.post('/session/stop',(req,res)=>{
-    const data= req.body;
-    const session= sessions.find(e=> e.id== data.id)
-    console.log(session);
-    
+app.post('/session/stop', async (req, res) => {
+    const data = req.body;
+    const session = await getSessionById(data.id);
     if (!session) {
         return res.status(404).send("session non trouvé")
     }
-    if (getStatus(session)==false || session.clotureeManuellement==true) {
+    if (!getStatus(session)) {
         return res.status(404).send("session expiré ou deja cloturée")
     }
-    session.clotureeManuellement= true
-    fs.writeFileSync("src/session.json", JSON.stringify(sessions), (err)=>{
-        if (err) console.log(err);
-         
-     })
-    res.status(200).send(session)
+    const closedSession = await closeAttendanceSession(data.id);
+    res.status(200).send(await formatSession(await getSessionById(closedSession.id)));
 })
-app.post('/session/list', (req,res)=>{
-    const data= req.body;
-    const session= sessions.find(e=> e.id== data.id)
-    console.log(session);
-    
+app.post('/session/list', async (req, res) => {
+    const data = req.body;
+    const session = await getSessionById(data.id);
     if (!session) {
         return res.status(404).send("session non trouvé")
     }
-    res.status(200).send(session.presences)
+    res.status(200).send(await listAttendances(session.id))
 })
 ////// LOGIN & CREDENTIALS
-app.post('/login',(req,res)=>{
+app.post('/login', async (req, res) => {
     //console.log("req:",req);
-    
-    const data= req.body;
-    const matricule= data.matricule;
+
+    const data = req.body;
+    const matricule = data.matricule;
     console.log(matricule);
-    
-    const  email= data.email;
-    const password= data.password;
-    let verify= checkInfo(matricule,email,password,users);
-    log("verify:", verify)
-    if(verify.check){
+
+    const email = data.email;
+    const password = data.password;
+    const profile = await authenticateProfile(matricule, email, password);
+    if (profile) {
         console.log("Accés autorisé: ");
-        res.status(200).send(users[verify.i])
-    }else{
+        res.status(200).send(profile)
+    } else {
         console.log("Accés non autorisé");
         res.status(403).send("Accés non autorisé")
     }
-    
+
 
 })
-    
-app.listen(3000, ()=>{
-    console.log("Serveur en ecoute");
-    
-})
+
+initDatabase()
+    .then(() => {
+        app.listen(3000, () => {
+            console.log("Serveur en ecoute");
+        });
+    })
+    .catch((error) => {
+        console.error("Impossible de démarrer le serveur :", error);
+        process.exit(1);
+    });

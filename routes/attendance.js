@@ -1,15 +1,15 @@
-const express= require('express')
+import express from 'express';
 
-router=express.Router();
+const router = express.Router();
 
 router.use(express.json());
 
-router.post('/attendance', (req,res)=>{
+router.post('/attendance', (req, res) => {
     console.log(req.body);
     res.end();
-    
+
 });
-    
 
 
-module.exports= router;
+
+export default router;
