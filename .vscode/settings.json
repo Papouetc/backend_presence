@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node --check database\\.js$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

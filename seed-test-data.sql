@@ -17,6 +17,20 @@ INSERT INTO subjects (name, code)
 VALUES ('Programmation C', 'PROG-C')
 ON CONFLICT (code) DO NOTHING;
 
+INSERT INTO class_prof (prof_id, class_id)
+SELECT p.id, c.id
+FROM profiles p
+JOIN classes c ON c.name = 'IRT 2'
+WHERE p.matricule = 'PROF001'
+ON CONFLICT (prof_id, class_id) DO NOTHING;
+
+INSERT INTO subjects_prof (prof_id, subject_id)
+SELECT p.id, s.id
+FROM profiles p
+JOIN subjects s ON s.code = 'PROG-C'
+WHERE p.matricule = 'PROF001'
+ON CONFLICT (prof_id, subject_id) DO NOTHING;
+
 INSERT INTO class_members (class_id, student_id)
 SELECT c.id, p.id
 FROM classes c

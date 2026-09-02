@@ -34,6 +34,18 @@ export async function initDatabase() {
       code TEXT UNIQUE
     );
 
+        CREATE TABLE IF NOT EXISTS class_prof (
+            prof_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            class_id BIGINT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+            PRIMARY KEY (prof_id, class_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS subjects_prof (
+            prof_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+            subject_id BIGINT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+            PRIMARY KEY (prof_id, subject_id)
+        );
+
     CREATE TABLE IF NOT EXISTS class_members (
       class_id BIGINT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       student_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -86,7 +98,35 @@ export async function authenticateProfile(matricule, email, password) {
      LIMIT 1`,
         [matricule, password]
     );
-    return result.rows[0] || null;
+    const profile = result.rows[0];
+    if (!profile) return null;
+
+    if (profile.role !== 'prof') return profile;
+
+    const [classesResult, subjectsResult] = await Promise.all([
+        pool.query(
+            `SELECT c.id, c.name
+         FROM class_prof cp
+         JOIN classes c ON c.id = cp.class_id
+         WHERE cp.prof_id = $1
+         ORDER BY c.name`,
+            [profile.id]
+        ),
+        pool.query(
+            `SELECT s.id, s.name, s.code
+         FROM subjects_prof sp
+         JOIN subjects s ON s.id = sp.subject_id
+         WHERE sp.prof_id = $1
+         ORDER BY s.name`,
+            [profile.id]
+        )
+    ]);
+
+    return {
+        ...profile,
+        classes: classesResult.rows,
+        modules: subjectsResult.rows
+    };
 }
 
 async function getOrCreateByName(table, name) {
