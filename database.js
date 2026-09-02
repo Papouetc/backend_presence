@@ -106,7 +106,7 @@ export async function authenticateProfile(matricule, email, password) {
     const [classesResult, subjectsResult] = await Promise.all([
         pool.query(
             `SELECT c.id, c.name
-         FROM class_prof cp
+         FROM classes_prof cp
          JOIN classes c ON c.id = cp.class_id
          WHERE cp.prof_id = $1
          ORDER BY c.name`,
