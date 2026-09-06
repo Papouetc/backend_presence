@@ -141,7 +141,11 @@ async function getOrCreateByName(table, name) {
 
 export async function createAttendanceSession({ professor, classe, matiere, dureeMinutes }) {
     const professorProfile = await findProfile(professor);
-    if (!professorProfile) return { error: 'professeur introuvable' };
+    if (!professorProfile) {
+        console.log(`prof introuvable  id: ${professor} classe: ${classe} matiere: ${matiere}`);
+        
+        return { error: 'professeur introuvable' }
+    };
 
     const classRow = await getOrCreateByName('classes', classe);
     const subjectRow = await getOrCreateByName('subjects', matiere);

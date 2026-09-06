@@ -126,13 +126,17 @@ res.status(200).send("Données reçu !")
 ////////SESSIONS
 app.post('/session', async (req, res) => {
     const data = req.body;
+    console.log(`
+            demande de session, info: ${JSON.stringify(data,null,2)}
+        `);
+    
     const result = await createAttendanceSession({
         professor: data.prof,
         classe: data.classe,
         matiere: data.matiere,
         dureeMinutes: data.duree || 15
     });
-    if (result.error) return res.status(404).send(result.error);
+    if (result.error) return res.status(422).send("Erreur creation de session");
     if (result.existing) return res.status(409).send(await formatSession(await getSessionById(result.existing.id)));
     res.status(200).send(await formatSession(await getSessionById(result.session.id)));
 });
