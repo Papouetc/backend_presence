@@ -131,7 +131,7 @@ app.post('/session', async (req, res) => {
         `);
     
     const result = await createAttendanceSession({
-        professor: data.prof,
+        professor: data.matricule,
         classe: data.classe,
         matiere: data.matiere,
         dureeMinutes: data.duree || 15
