@@ -183,9 +183,10 @@ app.post('/login', async (req, res) => {
 
 })
 
+let PORT= process.env.PORT || 3000
 initDatabase()
     .then(() => {
-        app.listen(3000, () => {
+        app.listen(PORT, () => {
             console.log("Serveur en ecoute");
         });
     })
