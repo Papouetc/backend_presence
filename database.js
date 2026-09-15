@@ -34,7 +34,7 @@ export async function initDatabase() {
       code TEXT UNIQUE
     );
 
-        CREATE TABLE IF NOT EXISTS class_prof (
+        CREATE TABLE IF NOT EXISTS classes_prof (
             prof_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
             class_id BIGINT NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
             PRIMARY KEY (prof_id, class_id)
@@ -106,7 +106,7 @@ export async function authenticateProfile(matricule, email, password) {
     const [classesResult, subjectsResult] = await Promise.all([
         pool.query(
             `SELECT c.id, c.name
-         FROM class_prof cp
+         FROM classes_prof cp
          JOIN classes c ON c.id = cp.class_id
          WHERE cp.prof_id = $1
          ORDER BY c.name`,
