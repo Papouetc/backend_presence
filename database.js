@@ -90,19 +90,7 @@ export async function findProfile(identifier) {
     return result.rows[0] || null;
 }
 
-export async function authenticateProfile(matricule, email, password) {
-    const result = await pool.query(
-        `SELECT id, matricule, name, surname, email, role, created_at
-     FROM profiles
-     WHERE matricule = $1 AND password = $2
-     LIMIT 1`,
-        [matricule, password]
-    );
-    const profile = result.rows[0];
-    if (!profile) return null;
-
-    if (profile.role !== 'prof') return profile;
-
+async function buildProfessorProfile(profile) {
     const [classesResult, subjectsResult] = await Promise.all([
         pool.query(
             `SELECT c.id, c.name
@@ -123,10 +111,82 @@ export async function authenticateProfile(matricule, email, password) {
     ]);
 
     return {
-        ...profile,
-        classes: classesResult.rows,
-        modules: subjectsResult.rows
+        role: 'prof',
+        matricule: profile.matricule,
+        name: profile.name,
+        surname: profile.surname,
+        classes: classesResult.rows.map(row => row.name),
+        modules: subjectsResult.rows.map(row => row.name)
     };
+}
+
+async function buildStudentProfile(profile) {
+    const classResult = await pool.query(
+        `SELECT c.name AS classe
+         FROM class_members cm
+         JOIN classes c ON c.id = cm.class_id
+         WHERE cm.student_id = $1
+         ORDER BY c.name ASC
+         LIMIT 1`,
+        [profile.id]
+    );
+
+    const studentClass = classResult.rows[0]?.classe || null;
+
+    let module = null;
+    if (studentClass) {
+        const moduleResult = await pool.query(
+            `SELECT DISTINCT s.name AS module
+             FROM classes_prof cp
+             JOIN subjects_prof sp ON sp.prof_id = cp.prof_id
+             JOIN subjects s ON s.id = sp.subject_id
+             JOIN classes c ON c.id = cp.class_id
+             WHERE c.name = $1
+             ORDER BY s.name ASC
+             LIMIT 1`,
+            [studentClass]
+        );
+        module = moduleResult.rows[0]?.module || null;
+    }
+
+    if (!profile.matricule || !profile.name || !profile.surname || !studentClass || !module) {
+        return null;
+    }
+
+    return {
+        role: 'etudiant',
+        matricule: profile.matricule,
+        name: profile.name,
+        surname: profile.surname,
+        classe: studentClass,
+        module
+    };
+}
+
+export async function authenticateProfile(matricule, password) {
+    const normalizedMatricule = String(matricule || '').trim();
+    const normalizedPassword = String(password || '');
+
+    if (!normalizedMatricule || !normalizedPassword) {
+        return null;
+    }
+
+    const result = await pool.query(
+        `SELECT id, matricule, name, surname, email, password, role, created_at
+     FROM profiles
+     WHERE matricule = $1
+     LIMIT 1`,
+        [normalizedMatricule]
+    );
+
+    const profile = result.rows[0];
+    if (!profile) return null;
+    if (profile.password !== normalizedPassword) return null;
+
+    if (profile.role === 'prof') return buildProfessorProfile(profile);
+    if (profile.role === 'etudiant') return buildStudentProfile(profile);
+
+    return null;
 }
 
 async function getOrCreateByName(table, name) {
@@ -143,7 +203,7 @@ export async function createAttendanceSession({ professor, classe, matiere, dure
     const professorProfile = await findProfile(professor);
     if (!professorProfile) {
         console.log(`prof introuvable  id: ${professor} classe: ${classe} matiere: ${matiere}`);
-        
+
         return { error: 'professeur introuvable' }
     };
 

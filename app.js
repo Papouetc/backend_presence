@@ -127,9 +127,9 @@ res.status(200).send("Données reçu !")
 app.post('/session', async (req, res) => {
     const data = req.body;
     console.log(`
-            demande de session, info: ${JSON.stringify(data,null,2)}
+            demande de session, info: ${JSON.stringify(data, null, 2)}
         `);
-    
+
     const result = await createAttendanceSession({
         professor: data.matricule,
         classe: data.classe,
@@ -163,27 +163,25 @@ app.post('/session/list', async (req, res) => {
 })
 ////// LOGIN & CREDENTIALS
 app.post('/login', async (req, res) => {
-    //console.log("req:",req);
+    const data = req.body || {};
+    const matricule = typeof data.matricule === 'string' ? data.matricule.trim() : '';
+    const password = typeof data.password === 'string' ? data.password : '';
 
-    const data = req.body;
-    const matricule = data.matricule;
-    console.log(matricule);
-
-    const email = data.email;
-    const password = data.password;
-    const profile = await authenticateProfile(matricule, email, password);
-    if (profile) {
-        console.log("Accés autorisé: ");
-        res.status(200).send(profile)
-    } else {
-        console.log("Accés non autorisé");
-        res.status(403).send("Accés non autorisé")
+    if (!matricule || !password) {
+        return res.status(400).json({ message: 'Matricule ou mot de passe incorrect' });
     }
 
+    const profile = await authenticateProfile(matricule, password);
+    if (profile) {
+        console.log('Accés autorisé:');
+        return res.status(200).json(profile);
+    }
 
+    console.log('Accés non autorisé');
+    return res.status(401).json({ message: 'Matricule ou mot de passe incorrect' });
 })
 
-let PORT= process.env.PORT || 3000
+let PORT = process.env.PORT || 3000
 initDatabase()
     .then(() => {
         app.listen(PORT, () => {
