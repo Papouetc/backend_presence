@@ -194,8 +194,10 @@ app.post("/utilisateur", async (req, res)=>{
 })
 
 app.get('/stats', async (req,res) => {
-    let stats= await getStats();
+    console.log('GET /stats');
     
+    let stats= await getStats();
+    res.status(200).send(stats)
 })
 
 
