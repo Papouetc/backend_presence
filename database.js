@@ -23,6 +23,15 @@ export async function initDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
+        ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+        ALTER TABLE profiles
+            ADD CONSTRAINT profiles_role_check CHECK (role IN ('prof', 'etudiant', 'admin'));
+
+        CREATE TABLE IF NOT EXISTS matricule_counters (
+            role TEXT PRIMARY KEY CHECK (role IN ('prof', 'etudiant', 'admin')),
+            last_index BIGINT NOT NULL DEFAULT 0 CHECK (last_index >= 0)
+        );
+
     CREATE TABLE IF NOT EXISTS classes (
       id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       name TEXT NOT NULL UNIQUE
@@ -163,6 +172,16 @@ async function buildStudentProfile(profile) {
     };
 }
 
+async function buildAdminProfile(profile) {
+
+    return {
+        role: 'admin',
+        matricule: profile.matricule,
+        name: profile.name,
+        surname: profile.surname
+    };
+}
+
 export async function authenticateProfile(matricule, password) {
     const normalizedMatricule = String(matricule || '').trim();
     const normalizedPassword = String(password || '');
@@ -185,10 +204,53 @@ export async function authenticateProfile(matricule, password) {
 
     if (profile.role === 'prof') return buildProfessorProfile(profile);
     if (profile.role === 'etudiant') return buildStudentProfile(profile);
+    if (profile.role === 'admin') return buildAdminProfile(profile);
 
     return null;
 }
 
+async function createMatricule(role) {
+    const prefixes = {
+        admin: 'ADM',
+        etudiant: 'ETU',
+        prof: 'PROF'
+    };
+    const prefix = prefixes[role];
+
+    if (!prefix) {
+        throw new Error(`Rôle invalide pour la génération du matricule : ${role}`);
+    }
+
+    const result = await pool.query(
+        `INSERT INTO matricule_counters (role, last_index)
+         SELECT $1, COALESCE(MAX(substring(matricule FROM '[0-9]+$')::BIGINT), 0) + 1
+         FROM profiles
+         WHERE role = $1 AND matricule ~ ('^' || $2 || '[0-9]+$')
+         ON CONFLICT (role) DO UPDATE
+         SET last_index = GREATEST(matricule_counters.last_index, EXCLUDED.last_index - 1) + 1
+         RETURNING last_index`,
+        [role, prefix]
+    );
+
+    return `${prefix}${String(result.rows[0].last_index).padStart(3, '0')}`;
+}
+
+export async function addUser({ role, nom, prenom, email, password }) {
+    try {
+        const matricule = await createMatricule(role);
+        const result = await pool.query(
+            `INSERT INTO profiles (matricule, name, surname, email, password, role)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING id, matricule, name, surname, email, role, created_at`,
+            [matricule, prenom, nom, email, password, role]
+        );
+    
+        return result.rows[0];
+    } catch (error) {
+        console.error(error);
+        return null
+    }
+}
 async function getOrCreateByName(table, name) {
     const result = await pool.query(
         `INSERT INTO ${table} (name) VALUES ($1)
@@ -321,3 +383,26 @@ export async function closeAttendanceSession(id) {
     );
     return result.rows[0] || null;
 }
+
+export async function getStats(){
+    const result = await pool.query(`
+        SELECT 
+        COUNT(*) FILTER (WHERE p.role = 'prof') AS nbProfs,
+        COUNT(*) FILTER (WHERE p.role = 'etudiant') AS nbEtudiants,
+        COUNT(*) FILTER (WHERE p.role = 'admin') AS nbadmins,
+        (SELECT COUNT(*) FROM classes) AS nbclasses
+        FROM profiles p
+        `)
+   return result.rows[0]
+}
+/* function count(list) {
+    let nbProf= list.filter(n=> n.role =='prof').length
+    let nbEtu= list.filter(n=> n.role =='etudiant').length
+    let nbAdmin= list.filter(n=> n.role =='admin').length
+    let nbr= {
+        'prof': nbProf,
+        'etu': nbEtu,
+        'adm': nbAdmin
+    }
+    return nbr
+} */

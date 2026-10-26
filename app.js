@@ -9,7 +9,9 @@ import {
     getSessionByQrToken,
     updateAttendanceStatus,
     listAttendances,
-    closeAttendanceSession
+    closeAttendanceSession,
+    addUser,
+    getStats
 } from './database.js';
 //const { json } = require('stream/consumers');
 //const attendance= require('./routes/attendance')
@@ -180,6 +182,22 @@ app.post('/login', async (req, res) => {
     console.log('Accés non autorisé');
     return res.status(401).json({ message: 'Matricule ou mot de passe incorrect' });
 })
+
+app.post("/utilisateur", async (req, res)=>{
+    const {role, nom,prenom,email,classe,password}= req.body
+    const user= await addUser({role,nom,prenom,email,classe,password})
+    if (!user) {
+        res.status(500).send('Erreur lors de la création de user')
+    }
+    res.status(201).json({ message: 'Utilisateur créé"', user:user });
+
+})
+
+app.get('/stats', async (req,res) => {
+    let stats= await getStats();
+    
+})
+
 
 let PORT = process.env.PORT || 3000
 initDatabase()
